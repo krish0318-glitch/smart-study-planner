@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import "./App.css";
 
@@ -36,9 +36,32 @@ function App() {
   const [filter, setFilter] = useState("all"); const [search, setSearch] = useState(""); const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ title:"", subject:"", description:"", priority:"Medium", dueDate:"", estimatedTime:60 });
   const authConfig = { headers: { Authorization: `Bearer ${token}` } };
-  const load = async () => { if (!token) return; setLoading(true); try { const [t,s] = await Promise.all([api.get("/tasks",authConfig),api.get("/tasks/stats/summary",authConfig)]); setTasks(t.data); setStats(s.data); } catch(e) { if(e.response?.status===401) logout(); } finally { setLoading(false); } };
-  useEffect(() => { load(); }, [token]);
   const logout = () => { localStorage.clear(); setToken(null); setUser(null); };
+  const load = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    const config = { headers: { Authorization: `Bearer ${token}` } };
+    try {
+      const [t, s] = await Promise.all([
+        api.get("/tasks", config),
+        api.get("/tasks/stats/summary", config)
+      ]);
+      setTasks(t.data);
+      setStats(s.data);
+    } catch (e) {
+      if (e.response?.status === 401) {
+        localStorage.clear();
+        setToken(null);
+        setUser(null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
   const addTask = async e => { e.preventDefault(); if(!form.title.trim()) return; try { await api.post("/tasks/add",form,authConfig); setForm({title:"",subject:"",description:"",priority:"Medium",dueDate:"",estimatedTime:60}); load(); } catch(e){ alert(e.response?.data?.message || "Could not add task"); } };
   const toggle = async t => { try { await api.put(`/tasks/${t._id}`,{completed:!t.completed},authConfig); load(); } catch(e){ alert("Could not update task"); } };
   const remove = async id => { if(!window.confirm("Delete this task?")) return; await api.delete(`/tasks/${id}`,authConfig); load(); };
